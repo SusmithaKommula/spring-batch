@@ -1,0 +1,77 @@
+package com.example.batch.config;
+
+import com.example.batch.model.Person;
+import org.springframework.batch.core.Job;
+import org.springframework.batch.core.Step;
+import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
+import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
+import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
+import org.springframework.batch.core.launch.support.RunIdIncrementer;
+import org.springframework.batch.core.step.tasklet.Tasklet;
+import org.springframework.batch.item.file.FlatFileItemReader;
+import org.springframework.batch.item.file.FlatFileItemWriter;
+import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
+import org.springframework.batch.item.file.builder.FlatFileItemWriterBuilder;
+import org.springframework.batch.item.support.ListItemReader;
+import org.springframework.batch.item.validator.BeanValidatingItemProcessor;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.ClassPathResource;
+
+@Configuration
+@EnableBatchProcessing
+public class BatchConfig {
+
+    private final JobBuilderFactory jobBuilderFactory;
+    private final StepBuilderFactory stepBuilderFactory;
+
+    public BatchConfig(JobBuilderFactory jobBuilderFactory, StepBuilderFactory stepBuilderFactory) {
+        this.jobBuilderFactory = jobBuilderFactory;
+        this.stepBuilderFactory = stepBuilderFactory;
+    }
+
+    @Bean
+    public FlatFileItemReader<Person> reader() {
+        return new FlatFileItemReaderBuilder<Person>()
+            .name("personItemReader")
+            .resource(new ClassPathResource("input.csv"))
+            .delimited()
+            .names(new String[]{"firstName", "lastName"})
+            .targetType(Person.class)
+            .build();
+    }
+
+    @Bean
+    public BeanValidatingItemProcessor<Person> processor() {
+        return new BeanValidatingItemProcessor<>();
+    }
+
+    @Bean
+    public FlatFileItemWriter<Person> writer() {
+        return new FlatFileItemWriterBuilder<Person>()
+            .name("personItemWriter")
+            .resource(new ClassPathResource("output.csv"))
+            .delimited()
+            .names(new String[]{"firstName", "lastName"})
+            .build();
+    }
+
+    @Bean
+    public Step step1() {
+        return stepBuilderFactory.get("step1")
+            .<Person, Person>chunk(10)
+            .reader(reader())
+            .processor(processor())
+            .writer(writer())
+            .build();
+    }
+
+    @Bean
+    public Job importUserJob() {
+        return jobBuilderFactory.get("importUserJob")
+            .incrementer(new RunIdIncrementer())
+            .flow(step1())
+            .end()
+            .build();
+    }
+}
